@@ -1,0 +1,25 @@
+{
+  "name": "gitlab2githubmigration",
+  "version": "1.0.0",
+  "description": "Script to migrate Gitlab projects to GitHub",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/basor-dali/gitLab2GitHubMigration.git"
+  },
+  "author": "Dali B.",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/basor-dali/gitLab2GitHubMigration/issues"
+  },
+  "homepage": "https://github.com/basor-dali/gitLab2GitHubMigration#readme",
+  "dependencies": {
+    "@gitbeaker/node": "file:gitbeaker/node@gitbeaker/node",
+    "@octokit/rest": "^19.0.7",
+    "child_process": "^1.0.2"
+  }
+}
