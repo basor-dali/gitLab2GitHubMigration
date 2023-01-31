@@ -8,67 +8,74 @@ const gitlab = new Gitlab({
 });
 
 const octokit = new Octokit({
-  auth: '<GITHUB ACCESS TOKEN>'
+  auth: 'GITHUB ACCESS TOKEN'
 });
 
-async function listAndMoveGroups() {
-  try {
-    const groups = await gitlab.Groups.all();
-    await processGroups(groups);
-  } catch (e) {
-    console.log('ERROR in listAndMoveGroups:', e);
-  }
-}
+async function mirrorProjects(group) {
+  console.log(`Processing Group: ${group.full_name}`);
 
-async function processGroups(groups) {
-  for (const group of groups) {
-    try {
-      console.log(`Group: ${group.full_name}`);
-      const subgroups = await gitlab.Groups.subgroups(group.id);
-      await processSubgroups(subgroups);
-    } catch (e) {
-      console.log(`ERROR in processGroups for group ${group.full_name}:`, e);
-    }
-  }
-}
+  const projects = await gitlab.Groups.projects(group.id);
 
-async function processSubgroups(subgroups) {
-  for (const subgroup of subgroups) {
-    try {
-      console.log(`\tSubgroup: ${subgroup.full_name}`);
-      const projects = await gitlab.Groups.projects(subgroup.id);
-      await processProjects(projects);
-    } catch (e) {
-      console.log(`ERROR in processSubgroups for subgroup ${subgroup.full_name}:`, e);
-    }
-  }
-}
-
-async function processProjects(projects) {
   for (const project of projects) {
-    try {
-      console.log(`\t\tProject: ${project.name}`);
-      const gitlabUrl = project.http_url_to_repo;
+    console.log(`Processing Project: ${project.name}`);
+    const gitlabUrl = project.http_url_to_repo;
 
+    try {
       const newRepo = await octokit.repos.createForAuthenticatedUser({
         name: `${project.path_with_namespace}`,
         description: project.description,
         private: true
       });
+  
+      await migrateIssues(project, newRepo);
       const githubUrl = `https://github.com/${newRepo.data.owner.login}/${newRepo.data.name}.git`;
-
+      
       execSync(`git clone ${gitlabUrl}`);
       process.chdir(`${project.name}`);
       execSync(`git remote add github ${githubUrl}`);
       execSync(`git push --mirror github`);
       execSync(`git remote remove github`);
       process.chdir('..');
-
-      console.log(`\t\tProject ${project.name} mirrored to GitHub.`);
-    } catch (e) {
-      console.log(`ERROR in processProjects for project ${project.name}:`, e);
+  
+      console.log(`Project ${project.name} mirrored to GitHub.`);
+    } catch (error) {
+      console.log(`Error mirroring project ${project.name}: ${error.message}. Skipping...`);
     }
   }
 }
+
+async function listAndMoveGroups() {
+  const groups = await gitlab.Groups.all();
+  try {
+    for (const group of groups) {
+      await mirrorProjects(group);
+
+      const subgroups = await gitlab.Groups.subgroups(group.id);
+      for (const subgroup of subgroups) {
+        await mirrorProjects(subgroup);
+      }
+    }
+  } catch (error) {
+    console.log(`Error processing groups: ${error.message}. Skipping...`);
+  }
+}
+
+async function migrateIssues(project, newRepo) {
+    const issues = await gitlab.Issues.all(project.id);
+  
+    for (const issue of issues) {
+      try {
+        const newIssue = await octokit.issues.create({
+          owner: newRepo.data.owner.login,
+          repo: newRepo.data.name,
+          title: issue.title,
+          body: issue.description
+        });
+        console.log(`\t\t\tIssue ${issue.title} migrated to GitHub.`);
+      } catch (error) {
+        console.error(`\t\t\tError migrating issue ${issue.title}: ${error}.`);
+      }
+    }
+  }
 
 await listAndMoveGroups();
