@@ -5,11 +5,11 @@ import {execSync} from 'node:child_process';
 
 const gitlab = new Gitlab({
   host: 'https://gitlab.com',
-  token: '<GITLAB_ACCESS_TOKEN>'
+  token: 'GITLAB-ACCESS-TOKEN'
 });
 
 const octokit = new Octokit({
-  auth: '<GITHUB_ACCESS_TOKEN>'
+  auth: 'GITHUB_ACCESS_TOKEN'
 });
 
 async function listAndMoveGroups() {
@@ -18,6 +18,7 @@ async function listAndMoveGroups() {
 }
 
 async function loopAndProcess(groups) {
+    
   for (const group of groups) {
     console.log(`Group: ${group.full_name}`);
     const subgroups = await gitlab.Groups.subgroups(group.id);
@@ -28,22 +29,21 @@ async function loopAndProcess(groups) {
 
       for (const project of projects) {
         console.log(`\t\tProject: ${project.name}`);
-        const gitlabUrl = project.ssh_url_to_repo;
-        console.log("Gitlab url", gitlabUrl);
+        const gitlabUrl = project.http_url_to_repo;
 
         const newRepo = await octokit.repos.createForAuthenticatedUser({
-          name: `${group.full_name}-${subgroup.full_name}-${project.name}`,
+          name: `${project.path_with_namespace}`,
           description: project.description,
           private: true
         });
         const githubUrl = `https://github.com/${newRepo.data.owner.login}/${newRepo.data.name}.git`;
 
         execSync(`git clone ${gitlabUrl}`);
-        execSync(`cd ${project.name}`);
+        process.chdir(`${project.name}`);
         execSync(`git remote add github ${githubUrl}`);
         execSync(`git push --mirror github`);
-        execSync(`git remote remove origin`);
-        execSync(`cd ..`);
+        execSync(`git remote remove github`);
+        process.chdir('..');
 
         console.log(`\t\tProject ${project.name} mirrored to GitHub.`);
       }
